@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+<meta name="mobile-web-app-capable" content="yes">
+<title>AETHORIA: El Último Guardián</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@400;600&display=swap');
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  :root {
+    --gold: #c9a84c; --gold-bright: #f0d060;
+    --dark: #0a0508; --text: #e8d5b0;
+    --hp-color: #e83535; --mp-color: #3580e8; --xp-color: #35c870;
+  }
+
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; touch-action:none; }
+  body { font-family:'Cinzel',serif; color:var(--text); user-select:none; }
+  #canvas { display:block; position:fixed; top:0; left:0; }
+
+  /* ── HUD ─────────────────────────────────────── */
+  #hud {
+    position:fixed; inset:0; pointer-events:none; z-index:10;
+    display:none;
+  }
+
+  /* Stats top-left */
+  #stats-panel {
+    position:absolute; top:env(safe-area-inset-top, 12px); left:12px;
+    background:rgba(10,5,8,.88);
+    border:1px solid rgba(201,168,76,.4); border-radius:6px;
+    padding:10px 14px; min-width:180px;
+    box-shadow:0 0 20px rgba(201,168,76,.1);
+  }
+  #hero-name {
+    font-family:'Cinzel Decorative',serif; font-size:11px;
+    color:var(--gold-bright); letter-spacing:2px; margin-bottom:8px;
+  }
+  .bar-row { margin-bottom:5px; }
+  .bar-label { font-size:8px; letter-spacing:1px; color:rgba(232,213,176,.5); margin-bottom:2px; }
+  .bar-track { height:7px; background:rgba(0,0,0,.7); border:1px solid rgba(255,255,255,.1); border-radius:2px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:2px; transition:width .3s; }
+  #hp-bar { background:linear-gradient(90deg,#6b1111,var(--hp-color)); }
+  #mp-bar { background:linear-gradient(90deg,#113080,var(--mp-color)); }
+  #xp-bar { background:linear-gradient(90deg,#0a6030,var(--xp-color)); }
+  .bar-numbers { font-size:8px; color:rgba(232,213,176,.4); text-align:right; margin-top:1px; }
+  #level-badge {
+    display:inline-block; margin-top:6px;
+    background:linear-gradient(135deg,var(--gold),#7a5a10);
+    color:var(--dark); font-size:8px; letter-spacing:2px;
+    padding:2px 7px; border-radius:2px; font-weight:700;
+  }
+
+  /* Kills top-center */
+  #kills-display {
+    position:absolute; top:env(safe-area-inset-top, 12px); left:50%; transform:translateX(-50%);
+    background:rgba(10,5,8,.88); border:1px solid rgba(201,168,76,.3);
+    border-radius:6px; padding:8px 16px; text-align:center;
+    font-size:11px; letter-spacing:2px; color:var(--gold);
+  }
+
+  /* Minimap top-right */
+  #minimap-container {
+    position:absolute; top:env(safe-area-inset-top, 12px); right:12px;
+    background:rgba(10,5,8,.88); border:1px solid rgba(201,168,76,.3);
+    border-radius:6px; padding:6px;
+  }
+  #minimap { width:90px; height:90px; border:1px solid rgba(201,168,76,.2); border-radius:2px; display:block; }
+  #minimap-label { text-align:center; font-size:7px; letter-spacing:2px; color:rgba(201,168,76,.5); margin-top:3px; }
+
+  /* ── TOUCH CONTROLS ──────────────────────────── */
+  /* Left side: Joystick */
+  #joystick-zone {
+    position:fixed; left:0; bottom:0;
+    width:45%; height:45%;
+    pointer-events:all; z-index:20;
+  }
+  #joystick-base {
+    position:absolute; left:60px; bottom:60px;
+    width:110px; height:110px; border-radius:50%;
+    background:rgba(255,255,255,.05);
+    border:2px solid rgba(201,168,76,.3);
+    display:flex; align-items:center; justify-content:center;
+    transition:opacity .2s;
+  }
+  #joystick-knob {
+    width:44px; height:44px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, rgba(201,168,76,.8), rgba(100,80,20,.6));
+    border:2px solid rgba(201,168,76,.6);
+    box-shadow:0 0 15px rgba(201,168,76,.3);
+    position:absolute;
+    transition:box-shadow .1s;
+  }
+
+  /* Right side: Action buttons */
+  #action-buttons {
+    position:fixed; right:16px; bottom:16px;
+    pointer-events:all; z-index:20;
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  }
+  .action-btn {
+    width:64px; height:64px; border-radius:50%;
+    background:rgba(10,5,8,.85);
+    border:2px solid rgba(201,168,76,.4);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:2px; cursor:pointer; pointer-events:all;
+    box-shadow:0 0 15px rgba(0,0,0,.5);
+    active-opacity:.7; transition:transform .1s, border-color .1s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .action-btn:active { transform:scale(.9); border-color:var(--gold); }
+  .action-btn.on-cooldown { opacity:.5; }
+  .action-btn .btn-icon { font-size:24px; }
+  .action-btn .btn-label { font-size:7px; letter-spacing:1px; color:rgba(201,168,76,.7); }
+  .action-btn .cd-text { font-size:14px; font-weight:700; color:var(--gold); position:absolute; }
+
+  /* Camera drag zone (center) */
+  #camera-zone {
+    position:fixed; left:45%; right:180px; top:0; bottom:0;
+    pointer-events:all; z-index:15;
+  }
+
+  /* Enemy panel */
+  #enemy-panel {
+    position:absolute; bottom:200px; right:12px;
+    background:rgba(10,5,8,.88); border:1px solid rgba(180,30,30,.5);
+    border-radius:6px; padding:10px 14px; min-width:160px;
+    display:none;
+  }
+  #enemy-panel.visible { display:block; }
+  #enemy-name-display { font-size:10px; color:#e87070; letter-spacing:1px; margin-bottom:6px; }
+
+  /* ── STORY SCREEN ─────────────────────────────── */
+  #story-overlay {
+    position:fixed; inset:0; z-index:100;
+    background:radial-gradient(ellipse at center, rgba(20,5,30,.98), #000);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:30px 24px;
+    overflow-y:auto;
+  }
+  #story-title {
+    font-family:'Cinzel Decorative',serif;
+    font-size:clamp(26px,8vw,52px); color:var(--gold-bright);
+    text-shadow:0 0 40px rgba(240,208,96,.8);
+    letter-spacing:4px; margin-bottom:12px; text-align:center;
+    animation:titlePulse 3s ease-in-out infinite;
+  }
+  #story-subtitle {
+    font-size:clamp(9px,3vw,13px); letter-spacing:3px;
+    color:rgba(201,168,76,.6); margin-bottom:36px; text-align:center;
+  }
+  @keyframes titlePulse {
+    0%,100% { text-shadow:0 0 40px rgba(240,208,96,.8); }
+    50%      { text-shadow:0 0 70px rgba(240,208,96,1), 0 0 120px rgba(201,168,76,.6); }
+  }
+  #story-text {
+    max-width:560px; font-size:clamp(11px,3.5vw,14px);
+    line-height:1.9; text-align:center; color:var(--text);
+    margin-bottom:36px; opacity:0; animation:fadeIn 2s 1s forwards;
+  }
+  @keyframes fadeIn { to { opacity:1; } }
+  #start-btn {
+    font-family:'Cinzel Decorative',serif; font-size:12px; letter-spacing:3px;
+    color:var(--dark); background:linear-gradient(135deg,var(--gold-bright),var(--gold));
+    border:none; padding:16px 40px; border-radius:4px; cursor:pointer;
+    box-shadow:0 0 30px rgba(201,168,76,.5);
+    opacity:0; animation:fadeIn 1s 3s forwards;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .corner { position:absolute; width:60px; height:60px; }
+  .corner::before,.corner::after { content:''; position:absolute; background:var(--gold); opacity:.35; }
+  .corner::before { width:100%; height:1px; top:0; left:0; }
+  .corner::after  { width:1px; height:100%; top:0; left:0; }
+  .corner.tl { top:16px; left:16px; }
+  .corner.tr { top:16px; right:16px; transform:scaleX(-1); }
+  .corner.bl { bottom:16px; left:16px; transform:scaleY(-1); }
+  .corner.br { bottom:16px; right:16px; transform:scale(-1); }
+
+  /* Damage numbers */
+  .dmg-number {
+    position:fixed; font-family:'Cinzel Decorative',serif;
+    font-size:20px; font-weight:900; pointer-events:none; z-index:50;
+    text-shadow:0 0 10px currentColor, 2px 2px 0 rgba(0,0,0,.8);
+    animation:floatDmg .9s ease-out forwards;
+  }
+  @keyframes floatDmg {
+    0%   { transform:translateY(0) scale(1); opacity:1; }
+    100% { transform:translateY(-65px) scale(.6); opacity:0; }
+  }
+
+  #flash { position:fixed; inset:0; pointer-events:none; z-index:40; opacity:0; transition:opacity .05s; }
+
+  /* Narrative popup */
+  #narrative {
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:linear-gradient(135deg,rgba(10,5,20,.97),rgba(20,5,30,.95));
+    border:1px solid rgba(201,168,76,.5); border-radius:8px;
+    padding:24px 28px; width:min(90vw, 420px);
+    text-align:center; z-index:60;
+    box-shadow:0 0 60px rgba(201,168,76,.2);
+    display:none; pointer-events:all;
+  }
+  #narrative.visible { display:block; animation:popIn .4s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes popIn {
+    from { transform:translate(-50%,-50%) scale(.8); opacity:0; }
+    to   { transform:translate(-50%,-50%) scale(1); opacity:1; }
+  }
+  #narrative-title {
+    font-family:'Cinzel Decorative',serif; font-size:13px;
+    color:var(--gold-bright); letter-spacing:2px; margin-bottom:12px;
+  }
+  #narrative-body { font-size:12px; line-height:1.8; color:var(--text); margin-bottom:16px; }
+  #narrative-btn {
+    font-family:'Cinzel',serif; font-size:10px; letter-spacing:2px;
+    color:var(--dark); background:var(--gold);
+    border:none; padding:10px 28px; border-radius:4px; cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+</style>
+</head>
+<body>
+
+<!-- Story Screen -->
+<div id="story-overlay">
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+  <div id="story-title">AETHORIA</div>
+  <div id="story-subtitle">⸺ EL ÚLTIMO GUARDIÁN ⸺</div>
+  <div id="story-text">
+    El reino de Aethoria yace en tinieblas. El Señor Oscuro
+    <span style="color:var(--gold)">Malvarath</span> ha corrompido el Cristal Eterno.<br><br>
+    Eres <span style="color:var(--gold)">Kael</span>, el último de los Guardianes de la Luz.
+    Atraviesa el Bosque Maldito, destruye a los siervos de la oscuridad
+    y restaura el equilibrio antes de que el mundo perezca.<br><br>
+    <em style="color:rgba(201,168,76,.7);font-size:.9em;">La leyenda comienza ahora.</em>
+  </div>
+  <button id="start-btn" onclick="startGame()">⚔ COMENZAR AVENTURA ⚔</button>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="stats-panel">
+    <div id="hero-name">✦ KAEL ✦</div>
+    <div class="bar-row">
+      <div class="bar-label">VIDA</div>
+      <div class="bar-track"><div class="bar-fill" id="hp-bar" style="width:100%"></div></div>
+      <div class="bar-numbers"><span id="hp-cur">100</span>/<span id="hp-max">100</span></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">MANÁ</div>
+      <div class="bar-track"><div class="bar-fill" id="mp-bar" style="width:100%"></div></div>
+      <div class="bar-numbers"><span id="mp-cur">80</span>/<span id="mp-max">80</span></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">EXP</div>
+      <div class="bar-track"><div class="bar-fill" id="xp-bar" style="width:0%"></div></div>
+    </div>
+    <div id="level-badge">NIV <span id="player-level">1</span></div>
+  </div>
+
+  <div id="kills-display">⚔ <span id="kill-count">0</span>/10</div>
+
+  <div id="minimap-container">
+    <canvas id="minimap" width="90" height="90"></canvas>
+    <div id="minimap-label">MAPA</div>
+  </div>
+
+  <div id="enemy-panel">
+    <div id="enemy-name-display">SOMBRA CORRUPTA</div>
+    <div class="bar-row">
+      <div class="bar-label">VIDA</div>
+      <div class="bar-track"><div class="bar-fill" id="enemy-hp-bar" style="width:100%;background:linear-gradient(90deg,#6b1111,var(--hp-color))"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Touch Controls -->
+<div id="joystick-zone">
+  <div id="joystick-base">
+    <div id="joystick-knob"></div>
+  </div>
+</div>
+
+<div id="camera-zone"></div>
+
+<div id="action-buttons">
+  <!-- Row 1 -->
+  <div class="action-btn" id="btn-0" ontouchstart="touchSkill(0)">
+    <div class="btn-icon">⚔️</div>
+    <div class="btn-label">ATACAR</div>
+  </div>
+  <div class="action-btn" id="btn-1" ontouchstart="touchSkill(1)">
+    <div class="btn-icon">✨</div>
+    <div class="btn-label">SAGRADO</div>
+  </div>
+  <!-- Row 2 -->
+  <div class="action-btn" id="btn-2" ontouchstart="touchSkill(2)">
+    <div class="btn-icon">🌟</div>
+    <div class="btn-label">LLUVIA</div>
+  </div>
+  <div class="action-btn" id="btn-3" ontouchstart="touchSkill(3)">
+    <div class="btn-icon">🛡️</div>
+    <div class="btn-label">ESCUDO</div>
+  </div>
+</div>
+
+<div id="flash"></div>
+
+<div id="narrative">
+  <div id="narrative-title"></div>
+  <div id="narrative-body"></div>
+  <button id="narrative-btn" onclick="closeNarrative()">CONTINUAR</button>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ══════════════════════════════════════════════
+//  AETHORIA MOBILE — GAME ENGINE
+// ══════════════════════════════════════════════
+
+let scene, camera, renderer, clock;
+let player, playerBody;
+let enemies = [], particles = [], projectiles = [], trees = [], crystals = [];
+
+const state = {
+  hp:100, maxHp:100, mp:80, maxMp:80,
+  xp:0, xpToNext:100, level:1,
+  kills:0, killGoal:10,
+  isInvincible:false, shield:false,
+  narrativeSeen:{}, gamePaused:false,
+  gameOver:false, gameWon:false
+};
+
+// Input
+const keys = {};
+let cameraYaw = 0, cameraPitch = 0.5;
+
+// ── JOYSTICK ──────────────────────────────────
+const joystick = {
+  active:false, id:-1,
+  baseX:0, baseY:0,
+  knobX:0, knobY:0,
+  dx:0, dy:0,
+  maxRadius:45
+};
+
+// ── CAMERA DRAG ───────────────────────────────
+const camDrag = {
+  active:false, id:-1,
+  lastX:0, lastY:0
+};
+
+const skills = [
+  { name:'Ataque',      cost:0,  cooldown:.4, cdLeft:0 },
+  { name:'Golpe',       cost:15, cooldown:2,  cdLeft:0 },
+  { name:'Lluvia',      cost:30, cooldown:5,  cdLeft:0 },
+  { name:'Escudo',      cost:20, cooldown:8,  cdLeft:0 }
+];
+
+// ── THREE INIT ────────────────────────────────
+function initThree() {
+  clock = new THREE.Clock();
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x080306);
+  scene.fog = new THREE.Fog(0x080306, 25, 100);
+
+  camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 300);
+
+  renderer = new THREE.WebGLRenderer({ canvas:document.getElementById('canvas'), antialias:true, powerPreference:'high-performance' });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.9;
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0x1a0a2e, 0.9));
+  const moon = new THREE.DirectionalLight(0x4060aa, 0.7);
+  moon.position.set(20,40,-30); moon.castShadow=true;
+  moon.shadow.mapSize.set(1024,1024);
+  moon.shadow.camera.left=-50; moon.shadow.camera.right=50;
+  moon.shadow.camera.top=50; moon.shadow.camera.bottom=-50;
+  scene.add(moon);
+  [-20,20].forEach(x=>{
+    const pl=new THREE.PointLight(0x5010a0,.7,35);
+    pl.position.set(x,8,-10); scene.add(pl);
+  });
+
+  buildTerrain(); buildPlayer(); buildForest(); buildCrystals(); spawnEnemies(5);
+
+  window.addEventListener('resize',()=>{
+    renderer.setSize(innerWidth,innerHeight);
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+  });
+
+  // Keyboard (for desktop fallback)
+  window.addEventListener('keydown',e=>{ keys[e.code]=true; handleKey(e.code); });
+  window.addEventListener('keyup',e=>keys[e.code]=false);
+
+  setupTouchControls();
+}
+
+// ── TOUCH CONTROLS ────────────────────────────
+function setupTouchControls() {
+  const jZone = document.getElementById('joystick-zone');
+  const cZone = document.getElementById('camera-zone');
+  const base  = document.getElementById('joystick-base');
+  const knob  = document.getElementById('joystick-knob');
+
+  // Joystick touch
+  jZone.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    joystick.active=true; joystick.id=t.identifier;
+    const rect=jZone.getBoundingClientRect();
+    joystick.baseX=t.clientX-rect.left;
+    joystick.baseY=t.clientY-rect.top;
+    base.style.left=(joystick.baseX-55)+'px';
+    base.style.bottom=(rect.height-joystick.baseY-55)+'px';
+    knob.style.transform='translate(0,0)';
+  }, {passive:false});
+
+  jZone.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier!==joystick.id) continue;
+      const rect=jZone.getBoundingClientRect();
+      const dx=t.clientX-rect.left-joystick.baseX;
+      const dy=t.clientY-rect.top-joystick.baseY;
+      const dist=Math.min(Math.sqrt(dx*dx+dy*dy), joystick.maxRadius);
+      const angle=Math.atan2(dy,dx);
+      const kx=Math.cos(angle)*dist, ky=Math.sin(angle)*dist;
+      knob.style.transform=`translate(${kx}px,${ky}px)`;
+      joystick.dx=kx/joystick.maxRadius;
+      joystick.dy=ky/joystick.maxRadius;
+    }
+  }, {passive:false});
+
+  const endJoystick = e=>{
+    for (const t of e.changedTouches) {
+      if (t.identifier===joystick.id) {
+        joystick.active=false; joystick.dx=0; joystick.dy=0;
+        knob.style.transform='translate(0,0)';
+      }
+    }
+  };
+  jZone.addEventListener('touchend', endJoystick, {passive:false});
+  jZone.addEventListener('touchcancel', endJoystick, {passive:false});
+
+  // Camera drag
+  cZone.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    if (camDrag.active) return;
+    const t=e.changedTouches[0];
+    camDrag.active=true; camDrag.id=t.identifier;
+    camDrag.lastX=t.clientX; camDrag.lastY=t.clientY;
+  }, {passive:false});
+
+  cZone.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier!==camDrag.id) continue;
+      const dx=t.clientX-camDrag.lastX;
+      const dy=t.clientY-camDrag.lastY;
+      cameraYaw   -= dx * 0.004;
+      cameraPitch -= dy * 0.004;
+      cameraPitch=Math.max(.15,Math.min(1.2,cameraPitch));
+      camDrag.lastX=t.clientX; camDrag.lastY=t.clientY;
+    }
+  }, {passive:false});
+
+  const endCam=e=>{
+    for (const t of e.changedTouches) {
+      if (t.identifier===camDrag.id) camDrag.active=false;
+    }
+  };
+  cZone.addEventListener('touchend',endCam,{passive:false});
+  cZone.addEventListener('touchcancel',endCam,{passive:false});
+
+  // Prevent scroll/zoom
+  document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+}
+
+function touchSkill(idx) {
+  useSkill(idx);
+}
+
+function handleKey(code) {
+  if (code==='KeyZ') useSkill(0);
+  if (code==='KeyX') useSkill(1);
+  if (code==='KeyC') useSkill(2);
+  if (code==='KeyV') useSkill(3);
+}
+
+// ── TERRAIN ───────────────────────────────────
+function buildTerrain() {
+  const geo=new THREE.PlaneGeometry(200,200,40,40);
+  const pos=geo.attributes.position;
+  for (let i=0;i<pos.count;i++) {
+    const x=pos.getX(i),z=pos.getY(i);
+    pos.setZ(i,Math.sin(x*.08)*1.5+Math.cos(z*.1)*1.2+Math.sin(x*.2+z*.15)*.5);
+  }
+  geo.computeVertexNormals();
+  const mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0x0c180a}));
+  mesh.rotation.x=-Math.PI/2; mesh.receiveShadow=true;
+  scene.add(mesh);
+}
+
+// ── PLAYER ────────────────────────────────────
+function buildPlayer() {
+  const g=new THREE.Group();
+  const bGeo=new THREE.CylinderGeometry(.3,.3,1.2,8);
+  playerBody=new THREE.Mesh(bGeo,new THREE.MeshLambertMaterial({color:0x2a4a8a}));
+  playerBody.position.y=.6; playerBody.castShadow=true; g.add(playerBody);
+
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),new THREE.MeshLambertMaterial({color:0xc8a070}));
+  head.position.y=1.35; head.castShadow=true; g.add(head);
+
+  const cape=new THREE.Mesh(new THREE.PlaneGeometry(.5,.7),new THREE.MeshLambertMaterial({color:0x6a1020,side:THREE.DoubleSide}));
+  cape.position.set(0,.7,.2); cape.rotation.x=.3; g.add(cape);
+
+  const sword=new THREE.Group();
+  const blade=new THREE.Mesh(new THREE.BoxGeometry(.04,.6,.04),new THREE.MeshLambertMaterial({color:0xd0d8ff,emissive:0x4060ff,emissiveIntensity:.4}));
+  blade.position.y=.3; sword.add(blade);
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(.2,.04,.04),new THREE.MeshLambertMaterial({color:0xc9a84c}));
+  sword.add(guard);
+  sword.position.set(.35,.8,0); g.add(sword);
+
+  const glow=new THREE.PointLight(0x4060ff,.8,6); glow.position.y=1; g.add(glow);
+  g.position.set(0,0,5); player=g; scene.add(player);
+}
+
+// ── FOREST ────────────────────────────────────
+function buildForest() {
+  const trunkMat=new THREE.MeshLambertMaterial({color:0x1a0d08});
+  const leafColors=[0x0d2010,0x102015,0x151a08,0x0a1a0f];
+  for (let i=0;i<80;i++) {
+    const angle=Math.random()*Math.PI*2, dist=10+Math.random()*50;
+    const tg=new THREE.Group();
+    const h=3+Math.random()*5;
+    tg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(.15,.25,h,6),trunkMat),{position:{x:0,y:h/2,z:0}}));
+    const lm=new THREE.MeshLambertMaterial({color:leafColors[Math.floor(Math.random()*4)]});
+    [0,.6,1.1].forEach((o,idx)=>{
+      const leaf=new THREE.Mesh(new THREE.ConeGeometry(1.4-idx*.3,1.5,7),lm);
+      leaf.position.y=h-1+o*1.3; leaf.castShadow=true; tg.add(leaf);
+    });
+    tg.position.set(Math.cos(angle)*dist,0,Math.sin(angle)*dist);
+    tg.rotation.y=Math.random()*Math.PI*2;
+    scene.add(tg); trees.push(tg);
+  }
+  // Rocks
+  const rockMat=new THREE.MeshLambertMaterial({color:0x1a1a20});
+  for (let i=0;i<30;i++) {
+    const angle=Math.random()*Math.PI*2, dist=5+Math.random()*55;
+    const r=new THREE.Mesh(new THREE.DodecahedronGeometry(.3+Math.random()*.7,0),rockMat);
+    r.position.set(Math.cos(angle)*dist,.2,Math.sin(angle)*dist);
+    r.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    r.castShadow=true; scene.add(r);
+  }
+}
+
+// ── CRYSTALS ──────────────────────────────────
+function buildCrystals() {
+  [[8,0,-8],[-10,0,12],[15,0,5],[-6,0,-15],[20,0,-20]].forEach(([x,y,z],idx)=>{
+    const cg=new THREE.Group();
+    const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.4,0),
+      new THREE.MeshLambertMaterial({color:0x6030c0,emissive:0x3010a0,emissiveIntensity:.8,transparent:true,opacity:.85}));
+    crystal.position.y=.5; cg.add(crystal);
+    const light=new THREE.PointLight(0x6030c0,.6,8); light.position.y=.5; cg.add(light);
+    cg.position.set(x,0,z);
+    cg.userData={crystal,light};
+    scene.add(cg); crystals.push(cg);
+  });
+}
+
+// ── ENEMIES ───────────────────────────────────
+function spawnEnemies(n) { for(let i=0;i<n;i++) spawnEnemy(); }
+
+function spawnEnemy() {
+  const angle=Math.random()*Math.PI*2, dist=15+Math.random()*20;
+  const g=new THREE.Group();
+
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,1,6),
+    new THREE.MeshLambertMaterial({color:0x3a0a0a,emissive:0x8a0000,emissiveIntensity:.3}));
+  body.position.y=.5; body.castShadow=true; g.add(body);
+
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.22,6,6),
+    new THREE.MeshLambertMaterial({color:0x5a0a0a,emissive:0xaa2020,emissiveIntensity:.5}));
+  head.position.y=1.25; g.add(head);
+
+  const eyeMat=new THREE.MeshLambertMaterial({color:0xff0000,emissive:0xff2020,emissiveIntensity:2});
+  [-1,1].forEach(s=>{
+    const eye=new THREE.Mesh(new THREE.SphereGeometry(.04,4,4),eyeMat);
+    eye.position.set(s*.1,1.28,-.18); g.add(eye);
+  });
+
+  const light=new THREE.PointLight(0xff2020,.4,5); light.position.y=1; g.add(light);
+  g.position.set(Math.cos(angle)*dist,0,Math.sin(angle)*dist);
+  g.userData={
+    hp:40+state.level*10, maxHp:40+state.level*10,
+    speed:1.5+Math.random()*.5+state.level*.2,
+    attackRange:1.8, attackCooldown:0, aggroRange:18,
+    alive:true, light, head, body
+  };
+  scene.add(g); enemies.push(g);
+}
+
+// ── SKILLS ────────────────────────────────────
+function useSkill(idx) {
+  const sk=skills[idx];
+  if (sk.cdLeft>0||state.mp<sk.cost||state.gamePaused) return;
+  sk.cdLeft=sk.cooldown; state.mp=Math.max(0,state.mp-sk.cost); updateBars();
+
+  const dir=new THREE.Vector3(); camera.getWorldDirection(dir);
+  switch(idx) {
+    case 0: spawnProjectile(player.position.clone().add(new THREE.Vector3(0,1,0)),dir.clone(),0x8090ff,15,20); flashScreen(0x4060ff,.15); break;
+    case 1:
+      for(let i=0;i<6;i++){const a=(i/6)*Math.PI*2; spawnProjectile(player.position.clone().add(new THREE.Vector3(0,1,0)),new THREE.Vector3(Math.cos(a),0,Math.sin(a)),0xffd040,35,12,.05);}
+      flashScreen(0xffd040,.4); spawnBurst(player.position.clone().add(new THREE.Vector3(0,1,0)),0xffd040,20);
+      break;
+    case 2:
+      enemies.filter(e=>e.userData.alive).slice(0,5).forEach(e=>{
+        const d=new THREE.Vector3().subVectors(e.position,player.position).add(new THREE.Vector3(0,1,0)).normalize();
+        spawnProjectile(player.position.clone().add(new THREE.Vector3(0,2,0)),d,0x60ffaa,25,18,.05);
+      });
+      flashScreen(0x60ffaa,.3);
+      break;
+    case 3:
+      state.shield=true; state.isInvincible=true;
+      flashScreen(0x8060ff,.5); spawnBurst(player.position.clone().add(new THREE.Vector3(0,1,0)),0x8060ff,20);
+      setTimeout(()=>{state.shield=false;state.isInvincible=false;},4000);
+      break;
+  }
+}
+
+// ── PROJECTILES / PARTICLES ───────────────────
+function spawnProjectile(pos,dir,color,damage,speed,size=.08) {
+  const mat=new THREE.MeshLambertMaterial({color,emissive:color,emissiveIntensity:1.5,transparent:true,opacity:.9});
+  const mesh=new THREE.Mesh(new THREE.SphereGeometry(size,5,5),mat);
+  mesh.position.copy(pos);
+  const light=new THREE.PointLight(color,1,4); mesh.add(light);
+  scene.add(mesh); projectiles.push({mesh,dir:dir.normalize(),speed,damage,life:2});
+}
+
+function spawnBurst(pos,color,count) {
+  for(let i=0;i<count;i++){
+    const mat=new THREE.MeshLambertMaterial({color,emissive:color,emissiveIntensity:1,transparent:true});
+    const mesh=new THREE.Mesh(new THREE.SphereGeometry(.04,4,4),mat);
+    mesh.position.copy(pos); scene.add(mesh);
+    const vel=new THREE.Vector3((Math.random()-.5)*4,Math.random()*4,(Math.random()-.5)*4);
+    particles.push({mesh,vel,life:.5+Math.random()*.3,maxLife:.8});
+  }
+}
+
+// ── COMBAT ────────────────────────────────────
+function hitEnemy(enemy,damage) {
+  if(!enemy.userData.alive) return;
+  enemy.userData.hp-=damage;
+  showDamageNumber(enemy.position,damage,'#f0d060');
+  spawnBurst(enemy.position.clone().add(new THREE.Vector3(0,1,0)),0xff4020,6);
+  if(enemy.userData.hp<=0) killEnemy(enemy);
+}
+
+function killEnemy(enemy) {
+  enemy.userData.alive=false;
+  spawnBurst(enemy.position.clone().add(new THREE.Vector3(0,.5,0)),0xff2020,20);
+  scene.remove(enemy); enemies.splice(enemies.indexOf(enemy),1);
+  state.kills++; gainXP(20+state.level*5);
+  document.getElementById('kill-count').textContent=state.kills;
+  if(state.kills>=state.killGoal) triggerVictory();
+  else if(state.kills===5&&!state.narrativeSeen['mid']){
+    state.narrativeSeen['mid']=true;
+    showNarrative('SUSURROS EN LA OSCURIDAD','"¡Eres más poderoso de lo que esperaba, Guardián!" — La voz de Malvarath retumba a través del bosque. ¡Pero sus siervos son infinitos!');
+    spawnEnemies(4);
+  }
+}
+
+function gainXP(amount) {
+  state.xp+=amount;
+  if(state.xp>=state.xpToNext) levelUp();
+  updateBars();
+}
+
+function levelUp() {
+  state.level++; state.xp-=state.xpToNext;
+  state.xpToNext=Math.floor(state.xpToNext*1.5);
+  state.maxHp+=20; state.hp=state.maxHp;
+  state.maxMp+=10; state.mp=state.maxMp;
+  document.getElementById('player-level').textContent=state.level;
+  flashScreen(0xffd040,1);
+  showNarrative('¡SUBISTE DE NIVEL!',`¡Nivel ${state.level}! Tu poder crece. Vida y maná restaurados completamente.`);
+  updateBars();
+}
+
+function damagePlayer(dmg) {
+  if(state.isInvincible||state.gameOver) return;
+  state.hp=Math.max(0,state.hp-dmg);
+  showDamageNumber(player.position,dmg,'#ff4040');
+  flashScreen(0xff0000,.4); updateBars();
+  if(state.hp<=0) triggerGameOver();
+}
+
+// ── UI HELPERS ────────────────────────────────
+function updateBars() {
+  document.getElementById('hp-bar').style.width=(state.hp/state.maxHp*100)+'%';
+  document.getElementById('mp-bar').style.width=(state.mp/state.maxMp*100)+'%';
+  document.getElementById('xp-bar').style.width=(state.xp/state.xpToNext*100)+'%';
+  document.getElementById('hp-cur').textContent=Math.ceil(state.hp);
+  document.getElementById('hp-max').textContent=state.maxHp;
+  document.getElementById('mp-cur').textContent=Math.ceil(state.mp);
+  document.getElementById('mp-max').textContent=state.maxMp;
+}
+
+function flashScreen(color,intensity) {
+  const flash=document.getElementById('flash');
+  flash.style.background='#'+color.toString(16).padStart(6,'0');
+  flash.style.opacity=intensity;
+  setTimeout(()=>flash.style.opacity=0,80);
+}
+
+function showDamageNumber(pos,dmg,color) {
+  const vec=pos.clone().project(camera);
+  const x=(vec.x+1)/2*innerWidth;
+  const y=(-vec.y+1)/2*innerHeight;
+  const el=document.createElement('div');
+  el.className='dmg-number';
+  el.style.left=(x+(Math.random()-.5)*40)+'px';
+  el.style.top=(y-30)+'px';
+  el.style.color=color;
+  el.textContent=Math.round(dmg);
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),950);
+}
+
+function showNarrative(title,body) {
+  state.gamePaused=true;
+  document.getElementById('narrative-title').textContent=title;
+  document.getElementById('narrative-body').textContent=body;
+  document.getElementById('narrative').classList.add('visible');
+}
+
+function closeNarrative() {
+  document.getElementById('narrative').classList.remove('visible');
+  state.gamePaused=false;
+}
+
+function triggerGameOver() {
+  if(state.gameOver) return; state.gameOver=true;
+  flashScreen(0xff0000,1);
+  setTimeout(()=>{
+    showNarrative('CAÍDO EN COMBATE','La oscuridad de Malvarath te ha consumido. Aethoria cae en las tinieblas eternas...\n\nToca continuar para intentarlo de nuevo.');
+    document.getElementById('narrative-btn').textContent='REINTENTAR';
+    document.getElementById('narrative-btn').onclick=()=>location.reload();
+  },600);
+}
+
+function triggerVictory() {
+  if(state.gameWon) return; state.gameWon=true;
+  flashScreen(0xffd040,1);
+  setTimeout(()=>{
+    showNarrative('¡VICTORIA ÉPICA!','¡Has derrotado a los siervos de Malvarath! El Cristal Eterno brilla de nuevo. La luz regresa a Aethoria. ¡Eres el Último Guardián!');
+    document.getElementById('narrative-btn').textContent='¡ÉPICO! ⚔';
+  },800);
+}
+
+// ── MINIMAP ───────────────────────────────────
+function drawMinimap() {
+  const canvas=document.getElementById('minimap');
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height, scale=W/100;
+  ctx.fillStyle='#050208'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#0a1a06';
+  trees.forEach(t=>ctx.fillRect((t.position.x+50)*scale-1,(t.position.z+50)*scale-1,2,2));
+  ctx.fillStyle='#6030c0';
+  crystals.forEach(c=>ctx.fillRect((c.position.x+50)*scale-2,(c.position.z+50)*scale-2,4,4));
+  ctx.fillStyle='#cc2020';
+  enemies.forEach(e=>{if(!e.userData.alive)return; ctx.fillRect((e.position.x+50)*scale-2,(e.position.z+50)*scale-2,4,4);});
+  ctx.fillStyle='#4080ff';
+  ctx.fillRect((player.position.x+50)*scale-3,(player.position.z+50)*scale-3,6,6);
+  ctx.strokeStyle='rgba(201,168,76,.3)'; ctx.strokeRect(0,0,W,H);
+}
+
+// ── GAME LOOP ─────────────────────────────────
+function gameLoop() {
+  requestAnimationFrame(gameLoop);
+  const dt=Math.min(clock.getDelta(),.05);
+  if(state.gamePaused||state.gameOver){ renderer.render(scene,camera); return; }
+
+  updateCamera(dt);
+  updatePlayer(dt);
+  updateEnemies(dt);
+  updateProjectiles(dt);
+  updateParticles(dt);
+  updateSkillCooldowns(dt);
+  updateCrystals(dt);
+  regenStats(dt);
+  drawMinimap();
+  updateEnemyPanel();
+  renderer.render(scene,camera);
+}
+
+function updateCamera(dt) {
+  // Keyboard camera
+  if(keys['ArrowLeft'])  cameraYaw+=dt*1.5;
+  if(keys['ArrowRight']) cameraYaw-=dt*1.5;
+
+  const dist=6;
+  const cx=player.position.x+Math.sin(cameraYaw)*dist*Math.cos(cameraPitch);
+  const cy=player.position.y+Math.sin(cameraPitch)*dist+1.5;
+  const cz=player.position.z+Math.cos(cameraYaw)*dist*Math.cos(cameraPitch);
+  camera.position.set(cx,cy,cz);
+  camera.lookAt(player.position.x,player.position.y+1,player.position.z);
+}
+
+function updatePlayer(dt) {
+  const speed=6;
+  const forward=new THREE.Vector3(-Math.sin(cameraYaw),0,-Math.cos(cameraYaw));
+  const right=new THREE.Vector3(Math.cos(cameraYaw),0,-Math.sin(cameraYaw));
+  const move=new THREE.Vector3();
+
+  // Joystick
+  if(joystick.active&&(Math.abs(joystick.dx)>.1||Math.abs(joystick.dy)>.1)) {
+    move.addScaledVector(forward,-joystick.dy);
+    move.addScaledVector(right,joystick.dx);
+  }
+  // Keyboard
+  if(keys['KeyW']) move.add(forward);
+  if(keys['KeyS']) move.sub(forward);
+  if(keys['KeyA']) move.sub(right);
+  if(keys['KeyD']) move.add(right);
+
+  if(move.length()>.01) {
+    move.normalize().multiplyScalar(speed*dt);
+    player.position.add(move);
+    player.rotation.y=Math.atan2(move.x,move.z);
+    playerBody.position.y=.6+Math.sin(Date.now()*.008)*.06;
+  }
+
+  player.position.x=Math.max(-75,Math.min(75,player.position.x));
+  player.position.z=Math.max(-75,Math.min(75,player.position.z));
+
+  // Crystal pickup
+  crystals.forEach((c,idx)=>{
+    if(player.position.distanceTo(c.position)<3&&!state.narrativeSeen['c'+idx]){
+      state.narrativeSeen['c'+idx]=true;
+      state.hp=Math.min(state.maxHp,state.hp+25);
+      state.mp=Math.min(state.maxMp,state.mp+20);
+      updateBars();
+      const lores=[
+        'Este cristal guarda la memoria de los Guardianes caídos. Sientes su fuerza fluyendo hacia ti...',
+        'Las runas aquí describen la primera batalla contra Malvarath, hace mil años.',
+        '¡El cristal sana tus heridas y restaura tu maná!',
+        '"La oscuridad no puede apagar una llama que arde desde el interior."',
+        'Visiones de Aethoria en su esplendor dorado. ¡Lucha por ese futuro!'
+      ];
+      showNarrative('CRISTAL ETERNO', lores[idx]||'Magia ancestral fluye por ti.');
+    }
+  });
+}
+
+function updateEnemies(dt) {
+  enemies.forEach(e=>{
+    if(!e.userData.alive) return;
+    const d=e.userData;
+    const dist=e.position.distanceTo(player.position);
+    if(dist<d.aggroRange){
+      const dir=new THREE.Vector3().subVectors(player.position,e.position).normalize();
+      e.position.addScaledVector(dir,d.speed*dt);
+      e.rotation.y=Math.atan2(dir.x,dir.z);
+      d.head.rotation.x=Math.sin(Date.now()*.003)*.1;
+      d.body.position.y=.5+Math.sin(Date.now()*.006)*.05;
+      if(dist<d.attackRange){
+        d.attackCooldown-=dt;
+        if(d.attackCooldown<=0){ d.attackCooldown=2; damagePlayer(8+state.level*2); }
+      }
+    }
+    d.light.intensity=.3+Math.sin(Date.now()*.003)*.2;
+  });
+}
+
+function updateProjectiles(dt) {
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p=projectiles[i];
+    p.mesh.position.addScaledVector(p.dir,p.speed*dt);
+    p.life-=dt;
+    let hit=false;
+    enemies.forEach(e=>{
+      if(!e.userData.alive||hit) return;
+      if(p.mesh.position.distanceTo(e.position.clone().add(new THREE.Vector3(0,.7,0)))<1.2){
+        hitEnemy(e,p.damage); hit=true;
+      }
+    });
+    if(hit||p.life<=0){
+      if(hit) spawnBurst(p.mesh.position.clone(),0xffa020,5);
+      scene.remove(p.mesh); projectiles.splice(i,1);
+    }
+  }
+}
+
+function updateParticles(dt) {
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.mesh.position.addScaledVector(p.vel,dt);
+    p.vel.y-=5*dt; p.life-=dt;
+    const prog=1-p.life/p.maxLife;
+    p.mesh.material.opacity=1-prog;
+    p.mesh.scale.setScalar(1-prog*.5);
+    if(p.life<=0){ scene.remove(p.mesh); particles.splice(i,1); }
+  }
+}
+
+function updateSkillCooldowns(dt) {
+  skills.forEach((sk,idx)=>{
+    if(sk.cdLeft>0){
+      sk.cdLeft-=dt;
+      const btn=document.getElementById('btn-'+idx);
+      if(sk.cdLeft>0){
+        btn.classList.add('on-cooldown');
+        btn.querySelector('.btn-label').textContent=sk.cdLeft.toFixed(1)+'s';
+      } else {
+        sk.cdLeft=0; btn.classList.remove('on-cooldown');
+        btn.querySelector('.btn-label').textContent=['ATACAR','SAGRADO','LLUVIA','ESCUDO'][idx];
+      }
+    }
+  });
+}
+
+function updateCrystals(dt) {
+  crystals.forEach(c=>{
+    c.userData.crystal.rotation.y+=dt*.8;
+    c.userData.crystal.rotation.x+=dt*.4;
+    c.userData.light.intensity=.5+Math.sin(Date.now()*.002)*.3;
+  });
+}
+
+function regenStats(dt) {
+  state.mp=Math.min(state.maxMp,state.mp+3*dt);
+  state.hp=Math.min(state.maxHp,state.hp+.3*dt);
+  updateBars();
+  if(enemies.length<3&&state.kills<state.killGoal) spawnEnemies(2);
+}
+
+function updateEnemyPanel() {
+  let closest=null, minDist=Infinity;
+  enemies.forEach(e=>{
+    if(!e.userData.alive) return;
+    const d=e.position.distanceTo(player.position);
+    if(d<minDist){ minDist=d; closest=e; }
+  });
+  const panel=document.getElementById('enemy-panel');
+  if(closest&&minDist<20){
+    panel.classList.add('visible');
+    document.getElementById('enemy-hp-bar').style.width=(closest.userData.hp/closest.userData.maxHp*100)+'%';
+  } else panel.classList.remove('visible');
+}
+
+// ── START ─────────────────────────────────────
+function startGame() {
+  document.getElementById('story-overlay').style.display='none';
+  document.getElementById('hud').style.display='block';
+  initThree();
+  updateBars();
+
+  // Lock orientation hint for mobile
+  if(screen.orientation&&screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(()=>{});
+  }
+
+  setTimeout(()=>{
+    showNarrative('EL BOSQUE MALDITO',
+      '🕹️ Joystick izquierdo para moverte.\n📷 Arrastra al centro para girar la cámara.\n⚔️ Botones derechos para tus habilidades.\n\n¡Los cristales púrpuras restauran vida! Derrota 10 siervos para ganar.');
+  },400);
+
+  gameLoop();
+}
+</script>
+</body>
+</html>
